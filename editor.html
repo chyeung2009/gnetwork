@@ -8,7 +8,6 @@
   <style>
     :root {
       --primary: #366092;
-      --primary-dark: #294b72;
       --success: #16a34a;
       --danger: #dc2626;
       --warning: #f59e0b;
@@ -95,10 +94,6 @@
       font-size: 14px;
       color: var(--muted);
     }
-    .status-alert {
-      color: #b91c1c;
-      font-weight: 700;
-    }
     .modal {
       position: fixed;
       inset: 0;
@@ -168,7 +163,6 @@
     }
     .action-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
     table.dataTable tbody td { vertical-align: top; }
-
     @media (max-width: 860px) {
       .grid { grid-template-columns: 1fr; }
       .modal-card { width: 100%; }
@@ -187,7 +181,7 @@
           <label for="gatePwd">Password</label>
           <input id="gatePwd" type="password" placeholder="8888" />
         </div>
-        <div class="status" id="gateStatus">輸入 8888 進入編輯器</div>
+        <div class="status" id="gateStatus">請輸入密碼進入編輯器</div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-success" id="gateBtn">Enter</button>
@@ -198,18 +192,17 @@
   <div class="container">
     <div class="header">
       <h1>members.json Popup 編輯器</h1>
-      <div class="sub">載入 members.json，以 DataTable 顯示，按鈕開啟 popup 進行新增、編輯、刪除，再下載更新後的 JSON。</div>
+      <div class="sub">載入 members.json，以 DataTable 顯示，按鈕開啟 popup 進行新增、編輯、刪除，並可直接寫回已授權的 members.json。</div>
       <div class="toolbar">
         <span class="badge" id="memberCount">0 筆資料</span>
         <button class="btn btn-primary" id="addBtn">新增成員</button>
-        <button class="btn btn-ghost" id="reloadBtn">重新載入 members.json</button>
-        <button class="btn btn-warning" id="saveUpdateBtn">SAVE & UPDATE members.json</button>
+        <button class="btn btn-ghost" id="reloadBtn">重新載入</button>
+        <button class="btn btn-ghost" id="openFileBtn">開啟 members.json</button>
+        <button class="btn btn-warning" id="saveUpdateBtn">SAVE & UPDATE</button>
         <button class="btn btn-ghost" id="downloadBtn">下載 JSON</button>
         <input type="file" id="importFile" accept="application/json" />
       </div>
       <div class="status" id="statusText">等待載入資料...</div>
-      <div class="status status-alert">進入編輯器需要密碼 8888；保存並更新 members.json 需要密碼 88888。</div>
-      <div class="status status-alert">注意：純 HTML 不能直接寫回硬碟原檔，保存後會下載新的 members.json，請手動覆蓋舊檔。</div>
     </div>
 
     <div class="panel">
@@ -274,6 +267,7 @@
     let table = null;
     let editIndex = -1;
     let unlocked = false;
+    let fileHandle = null;
 
     const el = id => document.getElementById(id);
     const modal = el('editorModal');
@@ -399,15 +393,60 @@
     async function loadMembers() {
       try {
         setStatus('正在載入 members.json ...');
+
+        if (fileHandle) {
+          const file = await fileHandle.getFile();
+          const text = await file.text();
+          const data = JSON.parse(text);
+          if (!Array.isArray(data)) throw new Error('members.json 必須是 array');
+          members = data.map(normalizeItem);
+          renderTable();
+          setStatus(`已從已授權檔案載入 members.json，共 ${members.length} 筆。`);
+          return;
+        }
+
         const res = await fetch('./members.json?t=' + Date.now());
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error('members.json 必須是 array');
         members = data.map(normalizeItem);
         renderTable();
-        setStatus(`已成功載入 members.json，共 ${members.length} 筆。`);
+        setStatus(`已成功載入 members.json，共 ${members.length} 筆。若要直接覆蓋檔案，請先按「開啟 members.json」。`);
       } catch (err) {
-        setStatus('載入失敗：' + err.message + '。請確認 index.html 與 members.json 在同一資料夾，並使用本機 server 開啟。');
+        setStatus('載入失敗：' + err.message + '。請確認 index.html 與 members.json 在同一資料夾，並使用 Chrome/Edge + 本機 server 開啟。');
+      }
+    }
+
+    async function openMembersFile() {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [
+            {
+              description: 'JSON Files',
+              accept: {
+                'application/json': ['.json']
+              }
+            }
+          ],
+          multiple: false
+        });
+
+        fileHandle = handle;
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (!Array.isArray(data)) {
+          throw new Error('members.json 必須是 array');
+        }
+
+        members = data.map(normalizeItem);
+        renderTable();
+        setStatus(`已開啟並授權 members.json，共 ${members.length} 筆。之後可直接 SAVE & UPDATE。`);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setStatus('開啟檔案失敗：' + err.message);
+        }
       }
     }
 
@@ -442,24 +481,60 @@
     }
 
     function requireSaveGate() {
-      const v = prompt('輸入密碼以保存並更新 members.json');
+      const v = prompt('請輸入保存密碼');
       return v === '88888';
     }
 
-    function saveAndUpdate() {
+    async function saveAndUpdate() {
       if (!requireSaveGate()) {
         setStatus('保存已取消：密碼錯誤。');
         return;
       }
 
-      const blob = new Blob([JSON.stringify(members, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'members.json';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setStatus('已產生新的 members.json，請用下載檔案覆蓋原本的 members.json。');
+      try {
+        const jsonText = JSON.stringify(members, null, 2);
+
+        if (fileHandle) {
+          const writable = await fileHandle.createWritable();
+          await writable.write(jsonText);
+          await writable.close();
+          setStatus('已直接寫回 members.json。');
+          return;
+        }
+
+        if ('showSaveFilePicker' in window) {
+          fileHandle = await window.showSaveFilePicker({
+            suggestedName: 'members.json',
+            types: [
+              {
+                description: 'JSON Files',
+                accept: {
+                  'application/json': ['.json']
+                }
+              }
+            ]
+          });
+
+          const writable = await fileHandle.createWritable();
+          await writable.write(jsonText);
+          await writable.close();
+          setStatus('已保存 members.json。之後再按 SAVE & UPDATE 可直接覆蓋同一檔案。');
+          return;
+        }
+
+        const blob = new Blob([jsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'members.json';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setStatus('你的瀏覽器不支援直接寫檔，已改用下載方式。');
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setStatus('保存失敗：' + err.message);
+        }
+      }
     }
 
     function downloadJson() {
@@ -496,7 +571,7 @@
         gateModal.style.display = 'none';
         setStatus('已進入編輯器。');
       } else {
-        el('gateStatus').textContent = '密碼錯誤，請輸入 8888';
+        el('gateStatus').textContent = '密碼錯誤，請再試一次';
       }
     }
 
@@ -506,6 +581,7 @@
 
     el('addBtn').addEventListener('click', () => openModal(-1));
     el('reloadBtn').addEventListener('click', loadMembers);
+    el('openFileBtn').addEventListener('click', openMembersFile);
     el('saveUpdateBtn').addEventListener('click', saveAndUpdate);
     el('downloadBtn').addEventListener('click', downloadJson);
     el('saveBtn').addEventListener('click', saveCurrent);
