@@ -9,8 +9,9 @@
     :root {
       --primary: #366092;
       --primary-dark: #294b72;
-      --success: #25d366;
+      --success: #16a34a;
       --danger: #dc2626;
+      --warning: #f59e0b;
       --bg: #f6f8fb;
       --card: #ffffff;
       --line: #d9e0ea;
@@ -65,6 +66,13 @@
     .btn-primary { background: var(--primary); color: #fff; }
     .btn-success { background: var(--success); color: #fff; }
     .btn-danger { background: var(--danger); color: #fff; }
+    .btn-warning {
+      background: var(--warning);
+      color: #111827;
+      font-size: 16px;
+      padding: 12px 18px;
+      box-shadow: 0 8px 18px rgba(245, 158, 11, 0.35);
+    }
     .btn-ghost { background: #fff; border: 1px solid var(--line); }
     .badge {
       display: inline-block;
@@ -86,6 +94,10 @@
       margin-top: 10px;
       font-size: 14px;
       color: var(--muted);
+    }
+    .status-alert {
+      color: #b91c1c;
+      font-weight: 700;
     }
     .modal {
       position: fixed;
@@ -155,9 +167,8 @@
       background: #fafbfd;
     }
     .action-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
-    table.dataTable tbody td {
-      vertical-align: top;
-    }
+    table.dataTable tbody td { vertical-align: top; }
+
     @media (max-width: 860px) {
       .grid { grid-template-columns: 1fr; }
       .modal-card { width: 100%; }
@@ -165,6 +176,25 @@
   </style>
 </head>
 <body>
+
+  <div class="modal show" id="gateModal" style="z-index:10000;">
+    <div class="modal-card" style="width:min(420px,100%);">
+      <div class="modal-head">
+        <h2>Enter Password</h2>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="gatePwd">Password</label>
+          <input id="gatePwd" type="password" placeholder="8888" />
+        </div>
+        <div class="status" id="gateStatus">輸入 8888 進入編輯器</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-success" id="gateBtn">Enter</button>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
     <div class="header">
       <h1>members.json Popup 編輯器</h1>
@@ -173,12 +203,13 @@
         <span class="badge" id="memberCount">0 筆資料</span>
         <button class="btn btn-primary" id="addBtn">新增成員</button>
         <button class="btn btn-ghost" id="reloadBtn">重新載入 members.json</button>
-        <button class="btn btn-success" id="saveUpdateBtn">SAVE & UPDATE members.json</button>
+        <button class="btn btn-warning" id="saveUpdateBtn">SAVE & UPDATE members.json</button>
         <button class="btn btn-ghost" id="downloadBtn">下載 JSON</button>
         <input type="file" id="importFile" accept="application/json" />
       </div>
       <div class="status" id="statusText">等待載入資料...</div>
-      <div class="status" style="color:#b91c1c;font-weight:700">注意：如果你用本機 server 開啟，保存後仍需手動下載檔案並覆蓋 members.json（純 HTML 不能直接寫回磁碟）。</div>
+      <div class="status status-alert">進入編輯器需要密碼 8888；保存並更新 members.json 需要密碼 88888。</div>
+      <div class="status status-alert">注意：純 HTML 不能直接寫回硬碟原檔，保存後會下載新的 members.json，請手動覆蓋舊檔。</div>
     </div>
 
     <div class="panel">
@@ -242,9 +273,12 @@
     let members = [];
     let table = null;
     let editIndex = -1;
+    let unlocked = false;
 
     const el = id => document.getElementById(id);
     const modal = el('editorModal');
+    const gateModal = el('gateModal');
+
     const fields = {
       name: el('name'),
       batch: el('batch'),
@@ -281,7 +315,9 @@
     }
 
     function openModal(index = -1) {
+      if (!unlocked) return;
       editIndex = index;
+
       if (index === -1) {
         el('modalTitle').textContent = '新增成員';
         fields.name.value = '';
@@ -300,6 +336,7 @@
         fields.coins.value = item.coins ?? '';
         el('deleteBtn').style.display = 'inline-block';
       }
+
       modal.classList.add('show');
     }
 
@@ -381,6 +418,7 @@
         fields.name.focus();
         return;
       }
+
       if (editIndex === -1) {
         members.unshift(item);
         setStatus(`已新增資料：${item.name}`);
@@ -388,6 +426,7 @@
         members[editIndex] = item;
         setStatus(`已更新資料：${item.name}`);
       }
+
       renderTable();
       closeModal();
     }
@@ -402,7 +441,17 @@
       closeModal();
     }
 
+    function requireSaveGate() {
+      const v = prompt('輸入密碼以保存並更新 members.json');
+      return v === '88888';
+    }
+
     function saveAndUpdate() {
+      if (!requireSaveGate()) {
+        setStatus('保存已取消：密碼錯誤。');
+        return;
+      }
+
       const blob = new Blob([JSON.stringify(members, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -414,7 +463,14 @@
     }
 
     function downloadJson() {
-      saveAndUpdate();
+      const blob = new Blob([JSON.stringify(members, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'members.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus('已下載 members.json。');
     }
 
     function importJsonFile(file) {
@@ -433,6 +489,17 @@
       reader.readAsText(file, 'utf-8');
     }
 
+    function tryEnterGate() {
+      const v = el('gatePwd').value.trim();
+      if (v === '8888') {
+        unlocked = true;
+        gateModal.style.display = 'none';
+        setStatus('已進入編輯器。');
+      } else {
+        el('gateStatus').textContent = '密碼錯誤，請輸入 8888';
+      }
+    }
+
     window.editRow = function(index) {
       openModal(index);
     };
@@ -445,13 +512,21 @@
     el('deleteBtn').addEventListener('click', deleteCurrent);
     el('cancelBtn').addEventListener('click', closeModal);
     el('closeModalBtn').addEventListener('click', closeModal);
+    el('gateBtn').addEventListener('click', tryEnterGate);
+
+    el('gatePwd').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') tryEnterGate();
+    });
+
     el('importFile').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (file) importJsonFile(file);
     });
+
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeModal();
     });
+
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeModal();
     });
