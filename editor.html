@@ -173,10 +173,12 @@
         <span class="badge" id="memberCount">0 筆資料</span>
         <button class="btn btn-primary" id="addBtn">新增成員</button>
         <button class="btn btn-ghost" id="reloadBtn">重新載入 members.json</button>
-        <button class="btn btn-success" id="downloadBtn">下載 JSON</button>
+        <button class="btn btn-success" id="saveUpdateBtn">SAVE & UPDATE members.json</button>
+        <button class="btn btn-ghost" id="downloadBtn">下載 JSON</button>
         <input type="file" id="importFile" accept="application/json" />
       </div>
       <div class="status" id="statusText">等待載入資料...</div>
+      <div class="status" style="color:#b91c1c;font-weight:700">注意：如果你用本機 server 開啟，保存後仍需手動下載檔案並覆蓋 members.json（純 HTML 不能直接寫回磁碟）。</div>
     </div>
 
     <div class="panel">
@@ -400,15 +402,19 @@
       closeModal();
     }
 
-    function downloadJson() {
+    function saveAndUpdate() {
       const blob = new Blob([JSON.stringify(members, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'members.json';
       a.click();
-      URL.revokeObjectURL(url);
-      setStatus('已下載 members.json。');
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus('已產生新的 members.json，請用下載檔案覆蓋原本的 members.json。');
+    }
+
+    function downloadJson() {
+      saveAndUpdate();
     }
 
     function importJsonFile(file) {
@@ -433,6 +439,7 @@
 
     el('addBtn').addEventListener('click', () => openModal(-1));
     el('reloadBtn').addEventListener('click', loadMembers);
+    el('saveUpdateBtn').addEventListener('click', saveAndUpdate);
     el('downloadBtn').addEventListener('click', downloadJson);
     el('saveBtn').addEventListener('click', saveCurrent);
     el('deleteBtn').addEventListener('click', deleteCurrent);
