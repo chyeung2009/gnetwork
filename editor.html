@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>members.json Popup Editor</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+  <style>
+    :root {
+      --primary: #366092;
+      --primary-dark: #294b72;
+      --success: #25d366;
+      --danger: #dc2626;
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --line: #d9e0ea;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --overlay: rgba(15, 23, 42, 0.55);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'PingFang HK', 'Microsoft JhengHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    .header {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+    }
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    .sub {
+      color: var(--muted);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: 0.2s;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-ghost { background: #fff; border: 1px solid var(--line); }
+    .badge {
+      display: inline-block;
+      background: #ef4444;
+      color: #fff;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 700;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      overflow: auto;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 9999;
+    }
+    .modal.show { display: flex; }
+    .modal-card {
+      width: min(760px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.2);
+      overflow: hidden;
+    }
+    .modal-head {
+      padding: 16px 20px;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-head h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+    .modal-body {
+      padding: 18px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .field input, .field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      background: #fff;
+    }
+    .field textarea {
+      min-height: 130px;
+      resize: vertical;
+    }
+    .span-2 { grid-column: 1 / -1; }
+    .modal-foot {
+      padding: 16px 18px 18px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      border-top: 1px solid var(--line);
+      background: #fafbfd;
+    }
+    .action-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+    table.dataTable tbody td {
+      vertical-align: top;
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+      .modal-card { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>members.json Popup 編輯器</h1>
+      <div class="sub">載入 members.json，以 DataTable 顯示，按鈕開啟 popup 進行新增、編輯、刪除，再下載更新後的 JSON。</div>
+      <div class="toolbar">
+        <span class="badge" id="memberCount">0 筆資料</span>
+        <button class="btn btn-primary" id="addBtn">新增成員</button>
+        <button class="btn btn-ghost" id="reloadBtn">重新載入 members.json</button>
+        <button class="btn btn-success" id="downloadBtn">下載 JSON</button>
+        <input type="file" id="importFile" accept="application/json" />
+      </div>
+      <div class="status" id="statusText">等待載入資料...</div>
+    </div>
+
+    <div class="panel">
+      <table id="membersTable" class="display" style="width:100%">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Batch</th>
+            <th>Phone</th>
+            <th>Service</th>
+            <th>Coins</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal" id="editorModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modalTitle">編輯成員</h2>
+        <button class="btn btn-ghost" id="closeModalBtn">關閉</button>
+      </div>
+      <div class="modal-body">
+        <div class="grid">
+          <div class="field">
+            <label for="name">Name</label>
+            <input id="name" type="text" />
+          </div>
+          <div class="field">
+            <label for="batch">Batch</label>
+            <input id="batch" type="text" />
+          </div>
+          <div class="field">
+            <label for="phone">Phone</label>
+            <input id="phone" type="text" />
+          </div>
+          <div class="field">
+            <label for="coins">Coins</label>
+            <input id="coins" type="number" min="0" step="1" />
+          </div>
+          <div class="field span-2">
+            <label for="service">Service</label>
+            <textarea id="service"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-danger" id="deleteBtn">刪除</button>
+        <button class="btn btn-ghost" id="cancelBtn">取消</button>
+        <button class="btn btn-success" id="saveBtn">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script>
+    let members = [];
+    let table = null;
+    let editIndex = -1;
+
+    const el = id => document.getElementById(id);
+    const modal = el('editorModal');
+    const fields = {
+      name: el('name'),
+      batch: el('batch'),
+      phone: el('phone'),
+      service: el('service'),
+      coins: el('coins')
+    };
+
+    function setStatus(text) {
+      el('statusText').textContent = text;
+    }
+
+    function updateCount() {
+      el('memberCount').textContent = `${members.length} 筆資料`;
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function normalizeItem(item) {
+      return {
+        name: String(item.name || '').trim(),
+        batch: String(item.batch || '').trim(),
+        phone: String(item.phone || '').trim(),
+        service: String(item.service || '').trim(),
+        coins: Number(item.coins || 0)
+      };
+    }
+
+    function openModal(index = -1) {
+      editIndex = index;
+      if (index === -1) {
+        el('modalTitle').textContent = '新增成員';
+        fields.name.value = '';
+        fields.batch.value = '';
+        fields.phone.value = '';
+        fields.service.value = '';
+        fields.coins.value = '';
+        el('deleteBtn').style.display = 'none';
+      } else {
+        const item = members[index];
+        el('modalTitle').textContent = `編輯成員：${item.name || ''}`;
+        fields.name.value = item.name || '';
+        fields.batch.value = item.batch || '';
+        fields.phone.value = item.phone || '';
+        fields.service.value = item.service || '';
+        fields.coins.value = item.coins ?? '';
+        el('deleteBtn').style.display = 'inline-block';
+      }
+      modal.classList.add('show');
+    }
+
+    function closeModal() {
+      modal.classList.remove('show');
+      editIndex = -1;
+    }
+
+    function getFormData() {
+      return normalizeItem({
+        name: fields.name.value,
+        batch: fields.batch.value,
+        phone: fields.phone.value,
+        service: fields.service.value,
+        coins: fields.coins.value
+      });
+    }
+
+    function renderTable() {
+      if (table) table.destroy();
+
+      const tbody = document.querySelector('#membersTable tbody');
+      tbody.innerHTML = members.map((m, i) => `
+        <tr>
+          <td>${escapeHtml(m.name)}</td>
+          <td>${escapeHtml(m.batch)}</td>
+          <td>${escapeHtml(m.phone)}</td>
+          <td>${escapeHtml(m.service)}</td>
+          <td>${m.coins}</td>
+          <td>
+            <div class="action-wrap">
+              <button class="btn btn-primary" onclick="editRow(${i})">編輯</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      table = $('#membersTable').DataTable({
+        pageLength: 25,
+        order: [[4, 'desc']],
+        language: {
+          search: '搜尋:',
+          lengthMenu: '每頁 _MENU_ 筆',
+          info: '顯示 _START_ 到 _END_，共 _TOTAL_ 筆',
+          paginate: {
+            first: '第一頁',
+            last: '最後頁',
+            next: '下一頁',
+            previous: '上一頁'
+          },
+          zeroRecords: '找不到資料',
+          infoEmpty: '沒有資料',
+          infoFiltered: '(從 _MAX_ 筆中篩選)'
+        }
+      });
+
+      updateCount();
+    }
+
+    async function loadMembers() {
+      try {
+        setStatus('正在載入 members.json ...');
+        const res = await fetch('./members.json?t=' + Date.now());
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error('members.json 必須是 array');
+        members = data.map(normalizeItem);
+        renderTable();
+        setStatus(`已成功載入 members.json，共 ${members.length} 筆。`);
+      } catch (err) {
+        setStatus('載入失敗：' + err.message + '。請確認 index.html 與 members.json 在同一資料夾，並使用本機 server 開啟。');
+      }
+    }
+
+    function saveCurrent() {
+      const item = getFormData();
+      if (!item.name) {
+        setStatus('Name 不能為空。');
+        fields.name.focus();
+        return;
+      }
+      if (editIndex === -1) {
+        members.unshift(item);
+        setStatus(`已新增資料：${item.name}`);
+      } else {
+        members[editIndex] = item;
+        setStatus(`已更新資料：${item.name}`);
+      }
+      renderTable();
+      closeModal();
+    }
+
+    function deleteCurrent() {
+      if (editIndex === -1) return;
+      const item = members[editIndex];
+      if (!confirm(`確定刪除 ${item.name}？`)) return;
+      members.splice(editIndex, 1);
+      renderTable();
+      setStatus(`已刪除資料：${item.name}`);
+      closeModal();
+    }
+
+    function downloadJson() {
+      const blob = new Blob([JSON.stringify(members, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'members.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus('已下載 members.json。');
+    }
+
+    function importJsonFile(file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!Array.isArray(data)) throw new Error('JSON 必須是 array');
+          members = data.map(normalizeItem);
+          renderTable();
+          setStatus(`已匯入 JSON，共 ${members.length} 筆。`);
+        } catch (err) {
+          setStatus('匯入失敗：' + err.message);
+        }
+      };
+      reader.readAsText(file, 'utf-8');
+    }
+
+    window.editRow = function(index) {
+      openModal(index);
+    };
+
+    el('addBtn').addEventListener('click', () => openModal(-1));
+    el('reloadBtn').addEventListener('click', loadMembers);
+    el('downloadBtn').addEventListener('click', downloadJson);
+    el('saveBtn').addEventListener('click', saveCurrent);
+    el('deleteBtn').addEventListener('click', deleteCurrent);
+    el('cancelBtn').addEventListener('click', closeModal);
+    el('closeModalBtn').addEventListener('click', closeModal);
+    el('importFile').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) importJsonFile(file);
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    loadMembers();
+  </script>
+</body>
+</html>
