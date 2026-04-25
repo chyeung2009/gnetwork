@@ -216,8 +216,11 @@
         const tbody = document.getElementById('tableBody');
 
         members.forEach(m => {
-            const waLink = `https://api.whatsapp.com/send?phone=852${m.phone}`;
-            
+          
+            // 將文字進行 URL 編碼，確保中文字能正確傳輸
+            const defaultMsg = encodeURIComponent("我是來自格局生態圈，我對你產品有興趣，想了解多啲詳情");
+            const waLink = `https://api.whatsapp.com/send?phone=852${m.phone}&text=${defaultMsg}`;
+                        
             // 填充卡片
             const card = document.createElement('div');
             card.className = 'card';
