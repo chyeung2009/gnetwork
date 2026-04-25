@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G14 格局生態圈服務系統</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #25d366;
+            --secondary-color: #366092;
+            --bg-color: #f8f9fa;
+        }
+
+        body {
+            font-family: 'PingFang HK', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0; padding: 20px;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        /* 頂部標題與統計 */
+        .header-box {
+            background: white;
+            padding: 30px 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .stats-badge {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-top: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* 視圖切換按鈕 */
+        .view-controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .btn-view {
+            padding: 10px 18px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            background: white;
+            font-weight: bold;
+            color: #555;
+            transition: 0.3s;
+        }
+
+        .btn-view.active {
+            background: var(--secondary-color);
+            color: white;
+            border-color: var(--secondary-color);
+        }
+
+        /* 表格佈局樣式 (Default) */
+        #tableViewContainer {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        table.dataTable thead th {
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 12px;
+        }
+
+        /* 卡片佈局樣式 (Grid) */
+        #gridViewContainer {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-top: 5px solid var(--secondary-color);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card h3 { margin: 0 0 10px 0; color: var(--secondary-color); font-size: 1.25em; }
+        .batch-tag { font-size: 0.75em; color: #666; background: #f0f0f0; padding: 3px 8px; border-radius: 4px; vertical-align: middle; }
+        .service-info { font-size: 0.95em; margin: 15px 0; flex-grow: 1; line-height: 1.6; color: #444; }
+        
+        .wa-link {
+            background: var(--primary-color);
+            color: white !important;
+            text-decoration: none !important;
+            text-align: center;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 600px) {
+            .view-controls { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-box">
+        <h1>格14「格局生態圈」服務系統</h1>
+        <div class="stats-badge">總共 42 位服務提供商</div>
+    </div>
+
+    <div class="view-controls">
+        <button class="btn-view active" onclick="switchView('table')" id="tableBtn"><i class="fas fa-table"></i> 表格視圖 (預設)</button>
+        <button class="btn-view" onclick="switchView('grid')" id="gridBtn"><i class="fas fa-th-large"></i> 卡片視圖</button>
+    </div>
+
+    <div id="tableViewContainer">
+        <table id="vendorTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>姓名</th>
+                    <th>班次</th>
+                    <th>服務內容與銅錢細節</th>
+                    <th>總銅錢</th>
+                    <th>WhatsApp 聯繫</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <div id="gridViewContainer" class="hidden"></div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+
+<script>
+    // 完整 42 位 Vendor 資料 (縮略展示主要資料)
+    const members = [
+        {name: "Ring Ma", batch: "格局始創班1/2", phone: "67727868", service: "煦心館：所有儀器任做一天 ($100=1銅); 活性肽減肥 ($200/次=2銅)", coins: 85},
+        {name: "Sanki Lee", batch: "格局4", phone: "95413319", service: "品牌策劃諮詢: Coffee (1銅); Lunch/Dinner (3銅)", coins: 55},
+        {name: "Joe", batch: "格局4", phone: "62288524", service: "公司秘書服務 ($1500=5銅); 潛能課程 ($500=5銅)", coins: 50},
+        {name: "Eddie Choi", batch: "格局5", phone: "92017477", service: "Party room coupon ($300=3銅); 保險查詢 ($100=1銅)", coins: 45},
+        {name: "Celine Cheung", batch: "格局4", phone: "93591413", service: "潛能工作坊 ($200/次=2銅); Coaching ($300/次=3銅)", coins: 45},
+        {name: "Van Lai", batch: "格局6", phone: "96954134", service: "餐飲到會/私房菜 ($500/次=5銅)", coins: 40},
+        {name: "Kevin Sin", batch: "格局1/2", phone: "96793131", service: "科技減肥 ($980=10銅); 通血管護心三寶 ($499=5銅)", coins: 40},
+        {name: "Eki Lee", batch: "格局8", phone: "68883521", service: "SME融資諮詢 ($100=1銅); 人生沙盤推演 ($400=4銅)", coins: 40},
+        {name: "Reiki Man", batch: "格局3", phone: "66332929", service: "紅白酒零售 ($180/支; $500/三支=5銅)", coins: 35},
+        {name: "Michelle 米米", batch: "格局8", phone: "95808233", service: "周年申報 ($1200=12銅); 稅務諮詢 ($200=2銅)", coins: 35},
+        {name: "Li Kong James", batch: "格局6", phone: "64931388", service: "AI 獲客系統 (6銅); AI 短視頻教學 (7銅)", coins: 35},
+        {name: "Joyce Yu", batch: "格局3", phone: "59953943", service: "拉丁舞體驗 ($300=3銅); 場地租用 ($300/hr=3銅)", coins: 35},
+        {name: "Anaka Ay", batch: "格局8", phone: "68283986", service: "中醫服務 (1銅); 酒吧唱K現金券 (1銅)", coins: 35},
+        {name: "Solomon Wong", batch: "格局9", phone: "94841945", service: "親子水墨畫班 ($200=2銅)", coins: 30},
+        {name: "Lawrence Yip", batch: "格局9", phone: "64626126", service: "CTox 排毒益生菌 ($250=2銅)", coins: 30},
+        {name: "Franky Leung", batch: "格局8", phone: "65798678", service: "保險/勞工保險 ($100=1銅); 財商理財課 ($999=10銅)", coins: 30},
+        {name: "Chun", batch: "格局5", phone: "62581698", service: "冷氣通風工程諮詢 ($200=2銅)", coins: 30},
+        {name: "Ronald Yip", batch: "格局7", phone: "67700023", service: "深圳洗牙/口腔醫療 ($100=1銅)", coins: 25},
+        {name: "Phoebe Li", batch: "格局11", phone: "98449913", "service": "「接不接」時間交易平台會員 ($100=1銅)", coins: 25},
+        {name: "Maymay Ng", batch: "格局9", phone: "55972886", service: "喪親統籌/帛事花籃代用券 ($200=2銅)", coins: 25},
+        {name: "Ellis Ho", batch: "格局9", phone: "65876583", service: "股票投資環球資訊 (1銅/月)", coins: 25},
+        {name: "Dr Louis Poon", batch: "格局4", phone: "94099909", service: "商業/融資諮詢 ($100/次=1銅)", coins: 25},
+        {name: "Yumi Cheng", batch: "格局8", phone: "61441074", service: "手作皂 ($200=2銅); 痛症治療 ($100=1銅)", coins: 20},
+        {name: "Wong Aries", batch: "格局13", phone: "65868787", service: "法律服務、改名契 ($1000=10銅)", coins: 20},
+        {name: "Nana Chan", batch: "格局13", phone: "94856857", service: "企業融資諮詢 (5銅); Party Room ($100=1銅)", coins: 20},
+        {name: "Mandi Lui", batch: "格局3", phone: "59341413", service: "AI 養生/減肥服務 ($980=10銅)", coins: 20},
+        {name: "Lucia 小胃", batch: "格局6", phone: "54277886", service: "阿卡西解讀 (5銅); 塔羅 (2銅)", coins: 20},
+        {name: "Charles Chu", batch: "格局13", phone: "61993093", service: "平面/Logo/Name Card 設計 ($1000=10銅)", coins: 20},
+        {name: "Water Chan", batch: "格局12", phone: "98727894", service: "個人 IP、AI 新媒體教學 ($100=1銅)", coins: 15},
+        {name: "Thomas Wong", batch: "格局13", phone: "94939507", service: "商業冷氣資訊 (5銅); 果籃現金券 (1銅)", coins: 15},
+        {name: "Suki Wong", batch: "格局12", phone: "63685949", service: "痛症治療 ($100=1銅)", coins: 15},
+        {name: "Koon Tung Rex", batch: "格局7", phone: "64848929", service: "拳擊/健身教練 ($200=2銅)", coins: 15},
+        {name: "Ko Chung Woon", batch: "格局13", phone: "97374236", service: "奇門遁甲問事 (4銅); 金錢靈氣 (4銅)", coins: 15},
+        {name: "Kings Lau", batch: "格局11", phone: "90177491", service: "Partyroom 現金券 ($200=2銅)", coins: 15},
+        {name: "Brian Chan", batch: "格局13", phone: "57222539", service: "遊戲化設計咨詢 ($100=1銅)", coins: 15},
+        {name: "Yuki Tsang", batch: "格局9", phone: "65002133", service: "海鮮蒸氣鍋現金券 ($100=1銅)", coins: 10},
+        {name: "Vivian Chu", batch: "格局13", phone: "66383168", service: "占卜問事/五行化解 ($500=5銅)", coins: 10},
+        {name: "Tina", batch: "格局10", phone: "69132346", service: "AI 賺錢教學送洗牙 ($100=1銅)", coins: 10},
+        {name: "Marty Chan", batch: "格局12", phone: "92102707", service: "商城百貨/企業聯盟系統 ($100=1銅)", coins: 10},
+        {name: "Jay Kwok", batch: "格局13", phone: "91541431", service: "去油清潔劑 (1銅); 飲食出牌顧問 (2銅)", coins: 10},
+        {name: "Christopher Poon", batch: "格局10", phone: "51963129", service: "康熙年頭療 ($680=7銅)", coins: 10},
+        {name: "Yuki Po", batch: "格局11", phone: "95447854", service: "湯包/酒醉食品 (1銅); 財務諮詢 (1銅)", coins: 5}
+    ];
+
+    function init() {
+        const grid = document.getElementById('gridViewContainer');
+        const tbody = document.getElementById('tableBody');
+
+        members.forEach(m => {
+            const waLink = `https://api.whatsapp.com/send?phone=852${m.phone}`;
+            
+            // 填充卡片
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <h3>${m.name} <span class="batch-tag">${m.batch}</span></h3>
+                <div class="service-info">${m.service}</div>
+                <div style="font-weight:bold; margin-bottom:12px; color:#c0392b;">總銅錢: ${m.coins}</div>
+                <a href="${waLink}" class="wa-link" target="_blank"><i class="fab fa-whatsapp"></i> 直接聯繫</a>
+            `;
+            grid.appendChild(card);
+
+            // 填充表格
+            const row = `<tr>
+                <td><strong>${m.name}</strong></td>
+                <td>${m.batch}</td>
+                <td>${m.service}</td>
+                <td style="color:#c0392b; font-weight:bold;">${m.coins}</td>
+                <td><a href="${waLink}" target="_blank" style="color:#25d366; font-weight:bold; text-decoration:none;"><i class="fab fa-whatsapp"></i> WhatsApp</a></td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+
+        // 初始化 DataTable
+        $('#vendorTable').DataTable({
+            "language": { "search": "關鍵字搜尋:", "lengthMenu": "每頁顯示 _MENU_ 筆" },
+            "pageLength": 10,
+            "order": [[3, "desc"]] // 預設按銅錢數降序排列
+        });
+    }
+
+    function switchView(view) {
+        if(view === 'table') {
+            document.getElementById('tableViewContainer').classList.remove('hidden');
+            document.getElementById('gridViewContainer').classList.add('hidden');
+            document.getElementById('tableBtn').classList.add('active');
+            document.getElementById('gridBtn').classList.remove('active');
+        } else {
+            document.getElementById('tableViewContainer').classList.add('hidden');
+            document.getElementById('gridViewContainer').classList.remove('hidden');
+            document.getElementById('gridBtn').classList.add('active');
+            document.getElementById('tableBtn').classList.remove('active');
+        }
+    }
+
+    window.onload = init;
+</script>
+
+</body>
+</html>
